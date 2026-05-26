@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-shell text-ink antialiased;
+  background-image:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 24rem),
+    linear-gradient(180deg, #f7f4ed 0%, #f2ede4 100%);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #bdb3a4 transparent;
+}
+
+input,
+select,
+textarea,
+button {
+  @apply outline-none;
+}
+
+.card {
+  @apply rounded-3xl border border-line bg-panel shadow-card;
+}
