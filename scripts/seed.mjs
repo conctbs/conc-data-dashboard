@@ -12,8 +12,10 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const db = new Database(dbPath);
-db.exec(fs.readFileSync(schemaPath, "utf8"));
+db.pragma("foreign_keys = ON");
 db.pragma("journal_mode = WAL");
+db.pragma("busy_timeout = 5000");
+db.exec(fs.readFileSync(schemaPath, "utf8"));
 
 const now = new Date().toISOString();
 const datasetId = `ds_${crypto.randomUUID()}`;

@@ -5,6 +5,7 @@ export type Aggregate = "sum" | "avg" | "count";
 export type WidgetKind =
   | "kpi"
   | "bar"
+  | "stacked_bar"
   | "line"
   | "pie"
   | "table"
@@ -87,6 +88,11 @@ export interface DashboardWidget {
   filterField?: string;
   dateField?: string;
   columns?: string[];
+  valueFields?: string[];
+  seriesField?: string;
+  matchField?: string;
+  matchValue?: string;
+  dateGranularity?: "day" | "week" | "month";
   description?: string;
 }
 

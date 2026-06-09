@@ -12,6 +12,9 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const db = new Database(dbPath);
+db.pragma("foreign_keys = ON");
+db.pragma("journal_mode = WAL");
+db.pragma("busy_timeout = 5000");
 db.exec(fs.readFileSync(schemaPath, "utf8"));
 
 const exists = db.prepare("SELECT 1 FROM settings WHERE key = ?").get("app_config");
