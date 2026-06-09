@@ -11,7 +11,9 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const db = new Database(dbPath);
+db.pragma("foreign_keys = ON");
 db.pragma("journal_mode = WAL");
+db.pragma("busy_timeout = 5000");
 
 export function initDatabase() {
   db.exec(`
@@ -73,6 +75,15 @@ export function initDatabase() {
       key TEXT PRIMARY KEY,
       value_json TEXT NOT NULL
     );
+
+    CREATE INDEX IF NOT EXISTS idx_dataset_sheets_dataset
+      ON dataset_sheets(dataset_id, position);
+    CREATE INDEX IF NOT EXISTS idx_dataset_columns_dataset_sheet
+      ON dataset_columns(dataset_id, sheet_name, position);
+    CREATE INDEX IF NOT EXISTS idx_dataset_rows_dataset_sheet
+      ON dataset_rows(dataset_id, sheet_name, row_index);
+    CREATE INDEX IF NOT EXISTS idx_dashboards_dataset
+      ON dashboards(dataset_id, updated_at);
   `);
 
   const exists = db

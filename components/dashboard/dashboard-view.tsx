@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DashboardRecord } from "@/lib/types";
+import type { DashboardFilter, DashboardRecord } from "@/lib/types";
 import { ErrorState, LoadingState } from "@/components/shared/states";
 import { WidgetCard } from "@/components/dashboard/widget-card";
 import { ExportActions } from "@/components/dashboard/export-actions";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 
 export function DashboardView({ dashboardId }: { dashboardId: string }) {
   const [dashboard, setDashboard] = useState<DashboardRecord | null>(null);
+  const [filters, setFilters] = useState<DashboardFilter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,6 +24,7 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
         return;
       }
       setDashboard(json);
+      setFilters(json.config.filters);
       setLoading(false);
     }
     void load();
@@ -30,6 +32,12 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
 
   if (loading) return <LoadingState label="Loading dashboard..." />;
   if (error || !dashboard) return <ErrorState message={error ?? "Dashboard not found."} />;
+
+  function updateFilter(filterId: string, partial: Partial<DashboardFilter>) {
+    setFilters((current) =>
+      current.map((filter) => (filter.id === filterId ? { ...filter, ...partial } as DashboardFilter : filter))
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -50,7 +58,12 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
               className={cn("col-span-12", widget.layout.w <= 3 && "lg:col-span-3", widget.layout.w === 4 && "lg:col-span-4", widget.layout.w >= 5 && widget.layout.w <= 6 && "lg:col-span-6", widget.layout.w >= 7 && widget.layout.w <= 8 && "lg:col-span-8", widget.layout.w >= 9 && "lg:col-span-12")}
               key={widget.id}
             >
-              <WidgetCard datasetId={dashboard.datasetId} filters={dashboard.config.filters} widget={widget} />
+              <WidgetCard
+                datasetId={dashboard.datasetId}
+                filters={filters}
+                onFilterChange={updateFilter}
+                widget={widget}
+              />
             </div>
           ))}
         </div>

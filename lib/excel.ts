@@ -2,9 +2,27 @@ import * as XLSX from "xlsx";
 import { slugify, parseNumber, parseDate } from "@/lib/utils";
 import type { ColumnType, ParsedWorkbook, SheetPreview } from "@/lib/types";
 
-function inferColumnType(values: unknown[]): ColumnType {
+function isIdentifierColumn(name: string) {
+  const normalized = name.normalize("NFKC").toLowerCase().replace(/\s+/g, "");
+  return [
+    "โทรศัพท์",
+    "มือถือ",
+    "รหัสไปรษณีย์",
+    "อีเมล์",
+    "email",
+    "lineid",
+    "ทะเบียนรถ",
+    "phone",
+    "mobile",
+    "postcode",
+    "zipcode"
+  ].some((term) => normalized.includes(term));
+}
+
+function inferColumnType(name: string, values: unknown[]): ColumnType {
   const meaningful = values.filter((value) => value !== null && value !== "");
   if (meaningful.length === 0) return "text";
+  if (isIdentifierColumn(name)) return "text";
 
   const numberHits = meaningful.filter((value) => parseNumber(value) !== null).length;
   const dateHits = meaningful.filter((value) => parseDate(value) !== null).length;
@@ -18,10 +36,14 @@ function inferColumnType(values: unknown[]): ColumnType {
 
 function rowsToObjects(rows: unknown[][]): Record<string, unknown>[] {
   const [headerRow = [], ...bodyRows] = rows;
+  const seenHeaders = new Map<string, number>();
   const headers = headerRow.map((cell, index) => {
     const fallback = `Column ${index + 1}`;
     const value = String(cell ?? "").trim();
-    return value || fallback;
+    const header = value || fallback;
+    const count = seenHeaders.get(header) ?? 0;
+    seenHeaders.set(header, count + 1);
+    return count === 0 ? header : `${header} (${count + 1})`;
   });
 
   return bodyRows
@@ -37,13 +59,17 @@ function rowsToObjects(rows: unknown[][]): Record<string, unknown>[] {
 function buildSheetPreview(name: string, rows: unknown[][]): SheetPreview {
   const records = rowsToObjects(rows);
   const headers = Object.keys(records[0] ?? {});
+  const seenSlugs = new Map<string, number>();
   const columns = headers.map((header, index) => {
     const values = records.slice(0, 50).map((row) => row[header]);
-    const inferredType = inferColumnType(values);
+    const inferredType = inferColumnType(header, values);
+    const baseSlug = slugify(header);
+    const count = seenSlugs.get(baseSlug) ?? 0;
+    seenSlugs.set(baseSlug, count + 1);
 
     return {
       name: header,
-      slug: slugify(header),
+      slug: count === 0 ? baseSlug : `${baseSlug}_${count + 1}`,
       inferredType,
       selectedType: inferredType
     };

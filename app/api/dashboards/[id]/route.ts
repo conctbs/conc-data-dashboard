@@ -1,20 +1,8 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { deleteDashboard, getDashboard, saveDashboard } from "@/lib/dashboard";
+import { dashboardPayloadSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
-
-const dashboardSchema = z.object({
-  datasetId: z.string().min(1),
-  name: z.string().min(1),
-  description: z.string().nullable().optional(),
-  isDefault: z.boolean().optional(),
-  config: z.object({
-    datasetId: z.string().min(1),
-    widgets: z.array(z.any()),
-    filters: z.array(z.any())
-  })
-});
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,7 +16,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const payload = dashboardSchema.parse(await request.json());
+    const payload = dashboardPayloadSchema.parse(await request.json());
     return NextResponse.json(saveDashboard({ ...payload, id }));
   } catch (error) {
     return NextResponse.json(
@@ -40,6 +28,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  deleteDashboard(id);
+  if (!deleteDashboard(id)) {
+    return NextResponse.json({ error: "Dashboard not found." }, { status: 404 });
+  }
   return NextResponse.json({ success: true });
 }

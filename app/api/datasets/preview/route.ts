@@ -11,6 +11,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "File is required." }, { status: 400 });
   }
 
+  if (file.size > 25 * 1024 * 1024) {
+    return NextResponse.json({ error: "File is too large. Maximum size is 25 MB." }, { status: 413 });
+  }
+
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (!extension || !["xlsx", "xls", "csv"].includes(extension)) {
     return NextResponse.json(

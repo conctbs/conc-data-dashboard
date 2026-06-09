@@ -24,6 +24,7 @@ import type {
   DashboardFilter,
   DashboardRecord,
   DashboardWidget,
+  DatasetColumn,
   DatasetDetail,
   DatasetRecord,
   WidgetKind
@@ -35,6 +36,7 @@ import { cn } from "@/lib/utils";
 const widgetKinds: Array<{ kind: WidgetKind; title: string; layout: DashboardWidget["layout"] }> = [
   { kind: "kpi", title: "KPI Card", layout: { w: 3, h: 1 } },
   { kind: "bar", title: "Bar Chart", layout: { w: 6, h: 2 } },
+  { kind: "stacked_bar", title: "Stacked Bar Chart", layout: { w: 8, h: 2 } },
   { kind: "line", title: "Line Chart", layout: { w: 6, h: 2 } },
   { kind: "pie", title: "Pie Chart", layout: { w: 4, h: 2 } },
   { kind: "table", title: "Data Table", layout: { w: 12, h: 2 } },
@@ -43,6 +45,148 @@ const widgetKinds: Array<{ kind: WidgetKind; title: string; layout: DashboardWid
 ];
 
 const aggregates: Aggregate[] = ["count", "sum", "avg"];
+
+type MarketingTopic = {
+  id: string;
+  title: string;
+  description: string;
+  kind: WidgetKind;
+  layout: DashboardWidget["layout"];
+  aggregate: Aggregate;
+  xTerms?: string[];
+  yTerms?: string[];
+  seriesTerms?: string[];
+};
+
+const marketingTopics: MarketingTopic[] = [
+  {
+    id: "registration_over_time",
+    title: "Registration trend",
+    description: "Count registrations by date for campaign timing analysis.",
+    kind: "line",
+    layout: { w: 8, h: 2 },
+    aggregate: "count",
+    xTerms: ["registration date", "registered at", "วันที่สมัคร"]
+  },
+  {
+    id: "lead_sources",
+    title: "Lead sources",
+    description: "Compare how applicants or leads discovered the program.",
+    kind: "bar",
+    layout: { w: 6, h: 2 },
+    aggregate: "count",
+    xTerms: ["lead source", "source", "channel", "ท่านทราบข้อมูลหลักสูตรนี้จาก"]
+  },
+  {
+    id: "payment_status",
+    title: "Payment status",
+    description: "Show paid, unpaid, and pending registrations.",
+    kind: "pie",
+    layout: { w: 4, h: 2 },
+    aggregate: "count",
+    xTerms: ["payment status", "registration status", "สถานะ"]
+  },
+  {
+    id: "payment_method_status",
+    title: "Payment method vs status",
+    description: "Find payment methods that need the most follow-up.",
+    kind: "stacked_bar",
+    layout: { w: 8, h: 2 },
+    aggregate: "count",
+    xTerms: ["payment method", "payment channel", "ชำระเงิน"],
+    seriesTerms: ["payment status", "registration status", "สถานะ"]
+  },
+  {
+    id: "revenue_over_time",
+    title: "Revenue over time",
+    description: "Trend line for revenue, sales, or orders by date.",
+    kind: "line",
+    layout: { w: 8, h: 2 },
+    aggregate: "sum",
+    xTerms: ["date", "day", "month", "week", "created", "order date"],
+    yTerms: ["revenue", "sales", "amount", "order value", "gmv"]
+  },
+  {
+    id: "channel_performance",
+    title: "Channel performance",
+    description: "Compare revenue or conversions across marketing channels.",
+    kind: "bar",
+    layout: { w: 6, h: 2 },
+    aggregate: "sum",
+    xTerms: ["channel", "source", "medium", "platform", "utm source"],
+    yTerms: ["revenue", "conversions", "orders", "sales", "leads"]
+  },
+  {
+    id: "campaign_conversion",
+    title: "Campaign conversions",
+    description: "Rank campaigns by conversions, leads, or orders.",
+    kind: "bar",
+    layout: { w: 6, h: 2 },
+    aggregate: "sum",
+    xTerms: ["campaign", "ad set", "adset", "creative", "utm campaign"],
+    yTerms: ["conversions", "leads", "orders", "purchases", "signups"]
+  },
+  {
+    id: "spend_mix",
+    title: "Spend mix",
+    description: "Show marketing spend distribution by channel or campaign.",
+    kind: "pie",
+    layout: { w: 4, h: 2 },
+    aggregate: "sum",
+    xTerms: ["channel", "campaign", "source", "platform"],
+    yTerms: ["spend", "cost", "ad spend", "budget"]
+  },
+  {
+    id: "marketing_table",
+    title: "Marketing detail table",
+    description: "Add a table of the most useful marketing columns.",
+    kind: "table",
+    layout: { w: 12, h: 2 },
+    aggregate: "count"
+  }
+];
+
+function normalizeColumnName(value: string) {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function findMarketingColumn(columns: DatasetColumn[], terms: string[] | undefined, types?: DatasetColumn["type"][]) {
+  const typedColumns = types?.length ? columns.filter((column) => types.includes(column.type)) : columns;
+  if (!terms?.length) return typedColumns[0] ?? columns[0];
+
+  const normalizedTerms = terms.map(normalizeColumnName);
+  return (
+    typedColumns.find((column) => {
+      const name = normalizeColumnName(column.name);
+      return normalizedTerms.some((term) => name === term || name.includes(term) || term.includes(name));
+    })
+  );
+}
+
+function marketingTableColumns(columns: DatasetColumn[]) {
+  const preferredTerms = [
+    "date",
+    "campaign",
+    "channel",
+    "source",
+    "medium",
+    "platform",
+    "spend",
+    "cost",
+    "revenue",
+    "sales",
+    "conversions",
+    "leads"
+  ];
+  const preferred = preferredTerms
+    .map((term) => findMarketingColumn(columns, [term]))
+    .filter(Boolean) as DatasetColumn[];
+  const unique = new Map(preferred.concat(columns).map((column) => [column.name, column.name]));
+  return Array.from(unique.values()).slice(0, 8);
+}
 
 export function DashboardBuilder() {
   const searchParams = useSearchParams();
@@ -54,9 +198,11 @@ export function DashboardBuilder() {
   const [dashboards, setDashboards] = useState<DashboardRecord[]>([]);
   const [currentDashboard, setCurrentDashboard] = useState<DashboardRecord | null>(null);
   const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
+  const [selectedMarketingTopicId, setSelectedMarketingTopicId] = useState(marketingTopics[0].id);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, startSaving] = useTransition();
+  const [generating, startGenerating] = useTransition();
   const selectedWidget =
     currentDashboard?.config.widgets.find((widget) => widget.id === selectedWidgetId) ?? null;
 
@@ -129,6 +275,12 @@ export function DashboardBuilder() {
     const sheet = datasetDetail.sheets[0];
     const template = widgetKinds.find((item) => item.kind === kind);
     if (!template) return;
+    const columns = datasetDetail.columns.filter((column) => column.sheetName === sheet.name);
+    const categoryColumn =
+      columns.find((column) => column.type === "category") ??
+      columns.find((column) => column.type === "text");
+    const numberColumn = columns.find((column) => column.type === "number");
+    const dateColumn = columns.find((column) => column.type === "date");
 
     const nextWidget: DashboardWidget = {
       id: `widget_${crypto.randomUUID()}`,
@@ -136,8 +288,69 @@ export function DashboardBuilder() {
       title: template.title,
       sheetName: sheet.name,
       layout: template.layout,
-      aggregate: kind === "kpi" ? "count" : "sum",
-      columns: datasetDetail.columns.filter((column) => column.sheetName === sheet.name).slice(0, 6).map((column) => column.name)
+      aggregate: numberColumn && ["bar", "line", "pie"].includes(kind) ? "sum" : "count",
+      xField:
+        kind === "line"
+          ? dateColumn?.name ?? categoryColumn?.name
+          : ["bar", "pie", "stacked_bar"].includes(kind)
+            ? categoryColumn?.name
+            : undefined,
+      yField: ["bar", "line", "pie"].includes(kind) ? numberColumn?.name : undefined,
+      seriesField: kind === "stacked_bar" ? categoryColumn?.name : undefined,
+      metricField: kind === "kpi" ? numberColumn?.name : undefined,
+      filterField: kind === "filter_dropdown" ? categoryColumn?.name : undefined,
+      dateField: kind === "date_range" ? dateColumn?.name : undefined,
+      columns: kind === "table" ? columns.slice(0, 6).map((column) => column.name) : undefined
+    };
+
+    updateDashboard((dashboard) => ({
+      ...dashboard,
+      config: {
+        ...dashboard.config,
+        widgets: [...dashboard.config.widgets, nextWidget]
+      }
+    }));
+    setSelectedWidgetId(nextWidget.id);
+  }
+
+  function addMarketingTopicWidget() {
+    if (!datasetDetail || !currentDashboard) return;
+    const topic = marketingTopics.find((item) => item.id === selectedMarketingTopicId) ?? marketingTopics[0];
+    const sheet = datasetDetail.sheets[0];
+    const sheetColumns = datasetDetail.columns.filter((column) => column.sheetName === sheet.name);
+    const xColumn = findMarketingColumn(sheetColumns, topic.xTerms, ["category", "date", "text"]);
+    const yColumn = topic.yTerms
+      ? findMarketingColumn(sheetColumns, topic.yTerms, ["number"])
+      : undefined;
+    const seriesColumn = topic.seriesTerms
+      ? findMarketingColumn(sheetColumns, topic.seriesTerms, ["category", "text"])
+      : undefined;
+    if (topic.kind !== "table" && !xColumn) {
+      setError(`No matching column was found for "${topic.title}".`);
+      return;
+    }
+    if (topic.yTerms && !yColumn) {
+      setError(`No numeric column was found for "${topic.title}".`);
+      return;
+    }
+    if (topic.kind === "stacked_bar" && !seriesColumn) {
+      setError(`No status/series column was found for "${topic.title}".`);
+      return;
+    }
+    setError(null);
+    const nextWidget: DashboardWidget = {
+      id: `widget_${crypto.randomUUID()}`,
+      kind: topic.kind,
+      title: topic.title,
+      sheetName: sheet.name,
+      layout: topic.layout,
+      aggregate: topic.aggregate,
+      xField: topic.kind === "table" ? undefined : xColumn?.name,
+      yField: topic.kind === "table" ? undefined : yColumn?.name,
+      seriesField: topic.kind === "stacked_bar" ? seriesColumn?.name : undefined,
+      dateGranularity: topic.id === "registration_over_time" ? "month" : undefined,
+      metricField: topic.kind === "kpi" ? yColumn?.name : undefined,
+      columns: topic.kind === "table" ? marketingTableColumns(sheetColumns) : undefined
     };
 
     updateDashboard((dashboard) => ({
@@ -230,6 +443,26 @@ export function DashboardBuilder() {
     });
   }
 
+  function generateMarketingDashboard() {
+    if (!datasetDetail) return;
+    startGenerating(async () => {
+      setError(null);
+      const response = await fetch("/api/dashboards/auto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datasetId: datasetDetail.id })
+      });
+      const json = await response.json();
+      if (!response.ok) {
+        setError(json.error ?? "Failed to generate marketing dashboard.");
+        return;
+      }
+      setCurrentDashboard(json);
+      setSelectedWidgetId(json.config.widgets[0]?.id ?? null);
+      setDashboards((current) => [json, ...current.filter((item) => item.id !== json.id)]);
+    });
+  }
+
   if (loading) return <LoadingState label="Preparing builder..." />;
   if (error) return <ErrorState message={error} />;
   if (!datasets.length) {
@@ -305,6 +538,39 @@ export function DashboardBuilder() {
                 {item.title}
               </button>
             ))}
+          </div>
+
+          <div className="mt-6 border-t border-line pt-4">
+            <p className="font-medium">Marketing analysis</p>
+            <button
+              className="mt-3 w-full rounded-2xl bg-ink px-4 py-3 text-left text-sm font-medium text-white disabled:opacity-50"
+              disabled={generating}
+              onClick={generateMarketingDashboard}
+              type="button"
+            >
+              {generating ? "Generating analysis..." : "Generate full marketing dashboard"}
+            </button>
+            <select
+              className="mt-3 w-full rounded-2xl border border-line bg-white px-3 py-3 text-sm"
+              value={selectedMarketingTopicId}
+              onChange={(event) => setSelectedMarketingTopicId(event.target.value)}
+            >
+              {marketingTopics.map((topic) => (
+                <option key={topic.id} value={topic.id}>
+                  {topic.title}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 min-h-10 text-xs leading-5 text-slate-500">
+              {marketingTopics.find((topic) => topic.id === selectedMarketingTopicId)?.description}
+            </p>
+            <button
+              className="mt-3 w-full rounded-2xl bg-accent px-4 py-3 text-left text-sm font-medium text-white"
+              onClick={addMarketingTopicWidget}
+              type="button"
+            >
+              Add marketing chart
+            </button>
           </div>
 
           <div className="mt-6 border-t border-line pt-4">
@@ -386,7 +652,22 @@ export function DashboardBuilder() {
                 <select
                   className="w-full rounded-2xl border border-line px-4 py-3"
                   value={selectedWidget.sheetName}
-                  onChange={(event) => updateWidget({ sheetName: event.target.value })}
+                  onChange={(event) =>
+                    updateWidget({
+                      sheetName: event.target.value,
+                      xField: undefined,
+                      yField: undefined,
+                      groupBy: undefined,
+                      metricField: undefined,
+                      filterField: undefined,
+                      dateField: undefined,
+                      columns: undefined,
+                      valueFields: undefined,
+                      seriesField: undefined,
+                      matchField: undefined,
+                      matchValue: undefined
+                    })
+                  }
                 >
                   {datasetDetail.sheets.map((sheet) => (
                     <option key={sheet.id} value={sheet.name}>
@@ -441,6 +722,43 @@ export function DashboardBuilder() {
                   ))}
                 </select>
               </Field>
+
+              {selectedWidget.kind === "stacked_bar" ? (
+                <Field label="Series Field">
+                  <select
+                    className="w-full rounded-2xl border border-line px-4 py-3"
+                    value={selectedWidget.seriesField ?? ""}
+                    onChange={(event) => updateWidget({ seriesField: event.target.value || undefined })}
+                  >
+                    <option value="">None</option>
+                    {groupedColumns.map((column) => (
+                      <option key={column.id} value={column.name}>
+                        {column.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              ) : null}
+
+              {selectedWidget.kind === "line" ? (
+                <Field label="Date grouping">
+                  <select
+                    className="w-full rounded-2xl border border-line px-4 py-3"
+                    value={selectedWidget.dateGranularity ?? ""}
+                    onChange={(event) =>
+                      updateWidget({
+                        dateGranularity:
+                          (event.target.value as DashboardWidget["dateGranularity"]) || undefined
+                      })
+                    }
+                  >
+                    <option value="">No grouping</option>
+                    <option value="day">Day</option>
+                    <option value="week">Week</option>
+                    <option value="month">Month</option>
+                  </select>
+                </Field>
+              ) : null}
 
               <Field label="Filter Field">
                 <select
