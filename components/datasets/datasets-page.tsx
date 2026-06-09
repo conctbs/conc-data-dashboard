@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { DatasetRecord } from "@/lib/types";
 import { EmptyState, ErrorState, LoadingState } from "@/components/shared/states";
+import { parseJsonResponse } from "@/lib/http";
 
 export function DatasetsPage() {
   const [items, setItems] = useState<DatasetRecord[]>([]);
@@ -14,13 +15,13 @@ export function DatasetsPage() {
     async function load() {
       setLoading(true);
       const response = await fetch("/api/datasets");
-      const json = await response.json();
-      if (!response.ok) {
-        setError(json.error ?? "Failed to load datasets.");
+      const { body, error: responseError } = await parseJsonResponse<DatasetRecord[]>(response);
+      if (!response.ok || responseError || !body) {
+        setError(responseError ?? "Failed to load datasets.");
         setLoading(false);
         return;
       }
-      setItems(json);
+      setItems(body);
       setLoading(false);
     }
 

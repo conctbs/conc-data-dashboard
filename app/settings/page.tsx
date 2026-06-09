@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ErrorState, LoadingState } from "@/components/shared/states";
+import { parseJsonResponse } from "@/lib/http";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null);
@@ -11,13 +12,13 @@ export default function SettingsPage() {
   useEffect(() => {
     async function load() {
       const response = await fetch("/api/settings");
-      const json = await response.json();
-      if (!response.ok) {
-        setError(json.error ?? "Failed to load settings.");
+      const { body, error: responseError } = await parseJsonResponse<Record<string, unknown>>(response);
+      if (!response.ok || responseError) {
+        setError(responseError ?? "Failed to load settings.");
         setLoading(false);
         return;
       }
-      setSettings(json);
+      setSettings(body);
       setLoading(false);
     }
     void load();

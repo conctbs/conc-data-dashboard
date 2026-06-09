@@ -21,6 +21,7 @@ import type { DashboardFilter, DashboardWidget, WidgetQueryResult } from "@/lib/
 import { formatNumber } from "@/lib/utils";
 import { LoadingState, ErrorState } from "@/components/shared/states";
 import { TableWidget } from "@/components/dashboard/table-widget";
+import { parseJsonResponse } from "@/lib/http";
 
 const pieColors = ["#0f766e", "#14b8a6", "#2dd4bf", "#99f6e4", "#115e59", "#0f172a"];
 
@@ -79,13 +80,13 @@ export function WidgetCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ datasetId, widget, filters: queryFilters })
       });
-      const json = await response.json();
-      if (!response.ok) {
-        setError(json.error ?? "Failed to load widget.");
+      const { body, error: responseError } = await parseJsonResponse<WidgetQueryResult>(response);
+      if (!response.ok || responseError || !body) {
+        setError(responseError ?? "Failed to load widget.");
         setLoading(false);
         return;
       }
-      setResult(json);
+      setResult(body);
       setLoading(false);
     }
 

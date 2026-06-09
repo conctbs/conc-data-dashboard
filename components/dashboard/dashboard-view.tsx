@@ -6,6 +6,7 @@ import { ErrorState, LoadingState } from "@/components/shared/states";
 import { WidgetCard } from "@/components/dashboard/widget-card";
 import { ExportActions } from "@/components/dashboard/export-actions";
 import { cn } from "@/lib/utils";
+import { parseJsonResponse } from "@/lib/http";
 
 export function DashboardView({ dashboardId }: { dashboardId: string }) {
   const [dashboard, setDashboard] = useState<DashboardRecord | null>(null);
@@ -17,14 +18,14 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
     async function load() {
       setLoading(true);
       const response = await fetch(`/api/dashboards/${dashboardId}`);
-      const json = await response.json();
-      if (!response.ok) {
-        setError(json.error ?? "Failed to load dashboard.");
+      const { body, error: responseError } = await parseJsonResponse<DashboardRecord>(response);
+      if (!response.ok || responseError || !body) {
+        setError(responseError ?? "Failed to load dashboard.");
         setLoading(false);
         return;
       }
-      setDashboard(json);
-      setFilters(json.config.filters);
+      setDashboard(body);
+      setFilters(body.config.filters);
       setLoading(false);
     }
     void load();

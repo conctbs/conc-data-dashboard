@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnType, ParsedWorkbook } from "@/lib/types";
 import { ErrorState, LoadingState } from "@/components/shared/states";
+import { parseJsonResponse } from "@/lib/http";
 
 const columnTypes: ColumnType[] = ["text", "number", "date", "category"];
 
@@ -27,13 +28,15 @@ export function UploadWorkflow() {
         body: formData
       });
 
-      const json = await response.json();
-      if (!response.ok) {
-        setError(json.error ?? "Failed to preview file.");
+      const { body, error: responseError } = await parseJsonResponse<ParsedWorkbook & { error?: string }>(
+        response
+      );
+      if (!response.ok || responseError) {
+        setError(responseError ?? "Failed to preview file.");
         return;
       }
 
-      setPreview(json);
+      setPreview(body);
     });
   }
 
@@ -56,13 +59,15 @@ export function UploadWorkflow() {
         body: JSON.stringify(preview)
       });
 
-      const json = await response.json();
-      if (!response.ok) {
-        setError(json.error ?? "Failed to import dataset.");
+      const { body, error: responseError } = await parseJsonResponse<{ datasetId: string; dashboardId: string } & { error?: string }>(
+        response
+      );
+      if (!response.ok || responseError || !body) {
+        setError(responseError ?? "Failed to import dataset.");
         return;
       }
 
-      router.push(`/builder?datasetId=${json.datasetId}&dashboardId=${json.dashboardId}`);
+      router.push(`/builder?datasetId=${body.datasetId}&dashboardId=${body.dashboardId}`);
     });
   }
 

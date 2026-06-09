@@ -3,11 +3,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { nowIso } from "@/lib/utils";
 
-const dataDir = path.join(process.cwd(), "data");
-const dbPath = path.join(dataDir, "dashboard.db");
+const bundledDataDir = path.join(process.cwd(), "data");
+const bundledDbPath = path.join(bundledDataDir, "dashboard.db");
+const runtimeDataDir = process.env.VERCEL ? path.join("/tmp", "conc-data-dashboard") : bundledDataDir;
+const dbPath = path.join(runtimeDataDir, "dashboard.db");
 
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+if (!fs.existsSync(runtimeDataDir)) {
+  fs.mkdirSync(runtimeDataDir, { recursive: true });
+}
+
+if (!fs.existsSync(dbPath) && fs.existsSync(bundledDbPath) && bundledDbPath !== dbPath) {
+  fs.copyFileSync(bundledDbPath, dbPath);
 }
 
 const db = new Database(dbPath);

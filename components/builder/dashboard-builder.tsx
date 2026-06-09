@@ -32,6 +32,7 @@ import type {
 import { EmptyState, ErrorState, LoadingState } from "@/components/shared/states";
 import { WidgetCard } from "@/components/dashboard/widget-card";
 import { cn } from "@/lib/utils";
+import { parseJsonResponse } from "@/lib/http";
 
 const widgetKinds: Array<{ kind: WidgetKind; title: string; layout: DashboardWidget["layout"] }> = [
   { kind: "kpi", title: "KPI Card", layout: { w: 3, h: 1 } },
@@ -211,27 +212,30 @@ export function DashboardBuilder() {
       setLoading(true);
       setError(null);
       const [datasetsRes, dashboardsRes] = await Promise.all([fetch("/api/datasets"), fetch("/api/dashboards")]);
-      const [datasetsJson, dashboardsJson] = await Promise.all([datasetsRes.json(), dashboardsRes.json()]);
+      const [datasetsJson, dashboardsJson] = await Promise.all([
+        parseJsonResponse<DatasetRecord[]>(datasetsRes),
+        parseJsonResponse<DashboardRecord[]>(dashboardsRes)
+      ]);
 
-      if (!datasetsRes.ok) {
+      if (!datasetsRes.ok || datasetsJson.error || !datasetsJson.body) {
         setError(datasetsJson.error ?? "Failed to load datasets.");
         setLoading(false);
         return;
       }
 
-      if (!dashboardsRes.ok) {
+      if (!dashboardsRes.ok || dashboardsJson.error || !dashboardsJson.body) {
         setError(dashboardsJson.error ?? "Failed to load dashboards.");
         setLoading(false);
         return;
       }
 
-      setDatasets(datasetsJson);
-      setDashboards(dashboardsJson);
+      setDatasets(datasetsJson.body);
+      setDashboards(dashboardsJson.body);
 
-      const effectiveDatasetId = datasetIdFromUrl ?? datasetsJson[0]?.id ?? null;
+      const effectiveDatasetId = datasetIdFromUrl ?? datasetsJson.body[0]?.id ?? null;
       const effectiveDashboard =
-        dashboardsJson.find((item: DashboardRecord) => item.id === dashboardIdFromUrl) ??
-        dashboardsJson.find((item: DashboardRecord) => item.datasetId === effectiveDatasetId) ??
+        dashboardsJson.body.find((item: DashboardRecord) => item.id === dashboardIdFromUrl) ??
+        dashboardsJson.body.find((item: DashboardRecord) => item.datasetId === effectiveDatasetId) ??
         null;
 
       if (effectiveDatasetId) {
@@ -247,12 +251,12 @@ export function DashboardBuilder() {
 
   async function loadDataset(datasetId: string) {
     const response = await fetch(`/api/datasets/${datasetId}`);
-    const json = await response.json();
-    if (!response.ok) {
-      setError(json.error ?? "Failed to load dataset detail.");
+    const { body, error: responseError } = await parseJsonResponse<DatasetDetail>(response);
+    if (!response.ok || responseError || !body) {
+      setError(responseError ?? "Failed to load dataset detail.");
       return;
     }
-    setDatasetDetail(json);
+    setDatasetDetail(body);
   }
 
   const groupedColumns = useMemo(() => {
@@ -430,15 +434,15 @@ export function DashboardBuilder() {
           config: currentDashboard.config
         })
       });
-      const json = await response.json();
-      if (!response.ok) {
-        setError(json.error ?? "Failed to save dashboard.");
+      const { body, error: responseError } = await parseJsonResponse<DashboardRecord>(response);
+      if (!response.ok || responseError || !body) {
+        setError(responseError ?? "Failed to save dashboard.");
         return;
       }
-      setCurrentDashboard(json);
+      setCurrentDashboard(body);
       setDashboards((current) => {
-        const exists = current.some((item) => item.id === json.id);
-        return exists ? current.map((item) => (item.id === json.id ? json : item)) : [json, ...current];
+        const exists = current.some((item) => item.id === body.id);
+        return exists ? current.map((item) => (item.id === body.id ? body : item)) : [body, ...current];
       });
     });
   }
@@ -452,14 +456,14 @@ export function DashboardBuilder() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ datasetId: datasetDetail.id })
       });
-      const json = await response.json();
-      if (!response.ok) {
-        setError(json.error ?? "Failed to generate marketing dashboard.");
+      const { body, error: responseError } = await parseJsonResponse<DashboardRecord>(response);
+      if (!response.ok || responseError || !body) {
+        setError(responseError ?? "Failed to generate marketing dashboard.");
         return;
       }
-      setCurrentDashboard(json);
-      setSelectedWidgetId(json.config.widgets[0]?.id ?? null);
-      setDashboards((current) => [json, ...current.filter((item) => item.id !== json.id)]);
+      setCurrentDashboard(body);
+      setSelectedWidgetId(body.config.widgets[0]?.id ?? null);
+      setDashboards((current) => [body, ...current.filter((item) => item.id !== body.id)]);
     });
   }
 
